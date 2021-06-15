@@ -61,7 +61,7 @@ def calculate_probabilities():
     selection_id_probabilities = dict()
     for runner in runners:
         if (selection_id := runner['selectionId']) in selection_id_scores:
-            price = runner['lastPriceTraded']
+            price = runner.get('lastPriceTraded', 1000)
             chance = calculate_chance(price)
             selection_id_probabilities[selection_id] = chance
     return selection_id_probabilities
