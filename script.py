@@ -110,12 +110,14 @@ def calculate_chance(odds):
 def calculate_probabilities(market_id):
     runners = sorted(get_runners(market_id), key=lambda x: x['selectionId'])
     selection_id_probabilities = dict()
+    price_of_score = dict()
     for runner in runners:
         if (selection_id := runner['selectionId']) in selection_id_scores:
             price = runner.get('lastPriceTraded', 1000)
+            price_of_score[selection_id_scores.get(selection_id)] = price
             chance = calculate_chance(price)
             selection_id_probabilities[selection_id] = chance
-    return selection_id_probabilities
+    return selection_id_probabilities, price_of_score
 
 
 def calculate_points(true, prediction):
@@ -153,7 +155,7 @@ def calculate_expected_points(points_per_score, probabilities_of_score):
 
 
 def get_prediction(market_id):
-    selection_id_probabilities = calculate_probabilities(market_id)
+    selection_id_probabilities, price_of_score = calculate_probabilities(market_id)
     expected_points_for_prediction = dict()
     for prediction in scores.copy():
         points_per_score = [calculate_points(real, prediction) for real in scores.copy()]
@@ -162,7 +164,7 @@ def get_prediction(market_id):
         )
     expected_points_for_prediction = OrderedDict(sorted(expected_points_for_prediction.items(),
                                                         key=lambda x: x[1], reverse=True))
-    database.insert_predictions(market_id, expected_points_for_prediction)
+    database.insert_predictions(market_id, expected_points_for_prediction, price_of_score)
     print(tabulate(expected_points_for_prediction.items(), headers=["score", "expected poins"], tablefmt="psql"))
 
 

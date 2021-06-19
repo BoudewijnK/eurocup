@@ -41,8 +41,15 @@ def create_tables():
                     (id integer PRIMARY KEY, 
                     market_id text,
                     time int,
-                    {','.join([f"{score_col} real" for score_col in create_score_cols()])}
+                    {', '.join([f"{score_col} real" for score_col in create_score_cols()])},
+                    {', '.join([f"price_{score_col} real" for score_col in create_score_cols()])}
                     )''')
+
+    # for score_col in create_score_cols():
+    #     query = f'''ALTER TABLE predictions ADD COLUMN price_{score_col} real'''
+    #     print(query)
+    #     cur.execute(query)
+
     con.commit()
     con.close()
 
@@ -64,17 +71,20 @@ def insert_match(market_id, event_name, event_time):
     con.close()
 
 
-def insert_predictions(market_id, expected_points_for_prediction):
+def insert_predictions(market_id, expected_points_for_prediction, price_of_score):
     score_cols = create_score_cols(expected_points_for_prediction.keys())
+    price_score_cols = [f"price_{c}" for c in create_score_cols(price_of_score.keys())]
 
     con = sqlite3.connect(DB_NAME)
     cur = con.cursor()
-    cur.execute(f'''INSERT INTO predictions (
-                        market_id, time, {', '.join(score_cols)}
+    query = f'''INSERT INTO predictions (
+                        market_id, time, {', '.join(score_cols)}, {', '.join(price_score_cols)}
                     ) VALUES (
-                        {market_id}, {int(time())}, {', '.join(map(str, expected_points_for_prediction.values()))}
+                        {market_id}, {int(time())}, {', '.join(map(str, expected_points_for_prediction.values()))},
+                        {', '.join(map(str, price_of_score.values()))}
                     )
-                    ''')
+                    '''
+    cur.execute(query)
     con.commit()
     con.close()
 
