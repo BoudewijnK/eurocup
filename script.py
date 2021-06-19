@@ -1,19 +1,21 @@
+import json
 import os
-import sys
 import requests
+import sys
 
+from datetime import datetime, timedelta
 from tabulate import tabulate
 from dotenv import load_dotenv
 
 load_dotenv()
 
-if len(sys.argv) > 1:
-    market_id = sys.argv[1]
-else:
-    market_id = "171635674"  # MANUAL INPUT
-    print(f"No input given via command line. Using {market_id}.")
-print(f"Match: https://www.betfair.com/exchange/plus/football/market/1.{market_id}")
-
+EURO_2020_ID = "11997260"
+BASE_URL = "https://api.betfair.com/exchange/betting/rest/v1.0/"
+HEADERS = {
+        'X-Application': os.environ['APP_KEY'],
+        'X-Authentication': os.environ['SESSION_TOKEN'],
+        'content-type': 'application/json',
+}
 
 selection_id_scores = {
     1: (0, 0),
@@ -37,27 +39,72 @@ selection_id_scores = {
 scores = list(selection_id_scores.values())
 
 
-def get_runners():
-    base_url = "https://api.betfair.com/exchange/betting/rest/v1.0/"
-    data = f'{{"marketIds": [1.{market_id}]}}'
-    headers = {
-        'X-Application': os.environ['APP_KEY'],
-        'X-Authentication': os.environ['SESSION_TOKEN'],
-        'content-type': 'application/json',
+def request_market_ids():
+    now = datetime.now()
+    future = now + timedelta(days=2)
+    data = {
+        "filter": {
+            "competitionIds": [EURO_2020_ID],
+            "marketTypeCodes": ["CORRECT_SCORE"],
+            "marketStartTime": {"to": future.strftime('%Y-%m-%dT')},
+            "inPlayOnly": False
+        },
+        "maxResults": 1000,
+        "sort": "FIRST_TO_START"
     }
-    url = base_url + "listMarketBook/"
-    response = requests.post(url=url, data=data, headers=headers)
+    url = BASE_URL + "listMarketCatalogue/"
+    response = requests.post(url=url, data=json.dumps(data), headers=HEADERS)
+    if response.status_code != 200:
+        exit('Status code != 200')
+
+    market_ids = [result.get('marketId') for result in response.json()]
+    return market_ids
+
+
+def get_market_ids():
+    if len(sys.argv) > 1:
+        market_ids = sys.argv[1:]
+    else:
+        market_ids = request_market_ids()
+    print(f'{market_ids=}')
+
+    return market_ids
+
+
+def get_runners(market_id):
+    data = f'{{"marketIds": [{market_id}]}}'
+    url = BASE_URL + "listMarketBook/"
+    response = requests.post(url=url, data=data, headers=HEADERS)
     if response.status_code != 200:
         exit('Status code != 200')
     return response.json()[0]['runners']
+
+
+def get_event_info(market_id):
+    data = {
+        "filter": {
+            "marketIds": [market_id],
+        }
+    }
+    url = BASE_URL + "listEvents/"
+    response = requests.post(url=url, data=json.dumps(data), headers=HEADERS)
+    if response.status_code != 200:
+        exit('Status code != 200')
+
+    assert len(response.json()) == 1, "We should get exactly one result, provided the market id is valid."
+
+    info = response.json()[0].get('event', {})
+    event_name = info.get('name')
+    event_time = datetime.strptime(info.get('openDate'), '%Y-%m-%dT%H:%M:%S.%fZ') + timedelta(hours=1)
+    print(event_name, '-', event_time.strftime('%a %d %b, %H:%M'))
 
 
 def calculate_chance(odds):
     return 1 / (odds - 1)
 
 
-def calculate_probabilities():
-    runners = sorted(get_runners(), key=lambda x: x['selectionId'])
+def calculate_probabilities(market_id):
+    runners = sorted(get_runners(market_id), key=lambda x: x['selectionId'])
     selection_id_probabilities = dict()
     for runner in runners:
         if (selection_id := runner['selectionId']) in selection_id_scores:
@@ -101,16 +148,25 @@ def calculate_expected_points(points_per_score, probabilities_of_score):
     return sum([point * prob for point, prob in zip(points_per_score, probabilities_of_score)])
 
 
-def main():
-    selection_id_probabilities = calculate_probabilities()
+def get_prediction(market_id):
+    selection_id_probabilities = calculate_probabilities(market_id)
     expected_points_for_prediction = list()
     for prediction in scores.copy():
         points_per_score = [calculate_points(real, prediction) for real in scores.copy()]
         expected_points_for_prediction.append((prediction, calculate_expected_points(
-                points_per_score, list(selection_id_probabilities.values())
+            points_per_score, list(selection_id_probabilities.values())
         )))
     expected_points_for_prediction.sort(key=lambda x: x[1], reverse=True)
     print(tabulate(expected_points_for_prediction, headers=["score", "expected poins"], tablefmt="psql"))
+
+
+def main():
+    market_ids = get_market_ids()
+
+    for market_id in market_ids:
+        print(f"Match: https://www.betfair.com/exchange/plus/football/market/{market_id}")
+        get_event_info(market_id)
+        get_prediction(market_id)
 
 
 if __name__ == '__main__':
