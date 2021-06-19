@@ -3,9 +3,12 @@ import os
 import requests
 import sys
 
+from collections import OrderedDict
 from datetime import datetime, timedelta
-from tabulate import tabulate
 from dotenv import load_dotenv
+from tabulate import tabulate
+
+from eurocup import database
 
 load_dotenv()
 
@@ -97,6 +100,7 @@ def get_event_info(market_id):
     event_name = info.get('name')
     event_time = datetime.strptime(info.get('openDate'), '%Y-%m-%dT%H:%M:%S.%fZ') + timedelta(hours=1)
     print(event_name, '-', event_time.strftime('%a %d %b, %H:%M'))
+    database.insert_match(market_id=market_id, event_name=event_name, event_time=event_time)
 
 
 def calculate_chance(odds):
@@ -150,14 +154,16 @@ def calculate_expected_points(points_per_score, probabilities_of_score):
 
 def get_prediction(market_id):
     selection_id_probabilities = calculate_probabilities(market_id)
-    expected_points_for_prediction = list()
+    expected_points_for_prediction = dict()
     for prediction in scores.copy():
         points_per_score = [calculate_points(real, prediction) for real in scores.copy()]
-        expected_points_for_prediction.append((prediction, calculate_expected_points(
+        expected_points_for_prediction[prediction] = calculate_expected_points(
             points_per_score, list(selection_id_probabilities.values())
-        )))
-    expected_points_for_prediction.sort(key=lambda x: x[1], reverse=True)
-    print(tabulate(expected_points_for_prediction, headers=["score", "expected poins"], tablefmt="psql"))
+        )
+    expected_points_for_prediction = OrderedDict(sorted(expected_points_for_prediction.items(),
+                                                        key=lambda x: x[1], reverse=True))
+    database.insert_predictions(market_id, expected_points_for_prediction)
+    print(tabulate(expected_points_for_prediction.items(), headers=["score", "expected poins"], tablefmt="psql"))
 
 
 def main():
