@@ -71,17 +71,17 @@ def insert_match(market_id, event_name, event_time):
     con.close()
 
 
-def insert_predictions(market_id, expected_points_for_prediction, price_of_score):
-    score_cols = create_score_cols(expected_points_for_prediction.keys())
-    price_score_cols = [f"price_{c}" for c in create_score_cols(price_of_score.keys())]
+def insert_predictions(market_id, df):
+    score_cols = create_score_cols(df.index.values)
+    price_score_cols = [f"price_{c}" for c in score_cols]
 
     con = sqlite3.connect(DB_NAME)
     cur = con.cursor()
     query = f'''INSERT INTO predictions (
                         market_id, time, {', '.join(score_cols)}, {', '.join(price_score_cols)}
                     ) VALUES (
-                        {market_id}, {int(time())}, {', '.join(map(str, expected_points_for_prediction.values()))},
-                        {', '.join(map(str, price_of_score.values()))}
+                        {market_id}, {int(time())}, {', '.join(map(str, df['expected_points'].values))},
+                        {', '.join(map(str, df['price'].values))}
                     )
                     '''
     cur.execute(query)

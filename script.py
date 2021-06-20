@@ -1,11 +1,16 @@
 import json
+import numpy as np
 import os
+
+import pandas as pd
 import requests
 import sys
 
-from collections import OrderedDict
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from itertools import product
+from matplotlib import pyplot as plt
+from matplotlib import cm
 from tabulate import tabulate
 
 from eurocup import database
@@ -70,14 +75,15 @@ def get_market_ids():
     else:
         market_ids = request_market_ids()
     print(f'{market_ids=}')
-
     return market_ids
 
 
 def get_runners(market_id):
-    data = f'{{"marketIds": [{market_id}]}}'
+    data = {
+        "marketIds": [market_id]
+    }
     url = BASE_URL + "listMarketBook/"
-    response = requests.post(url=url, data=data, headers=HEADERS)
+    response = requests.post(url=url, data=json.dumps(data), headers=HEADERS)
     if response.status_code != 200:
         exit('Status code != 200')
     return response.json()[0]['runners']
@@ -101,23 +107,22 @@ def get_event_info(market_id):
     event_time = datetime.strptime(info.get('openDate'), '%Y-%m-%dT%H:%M:%S.%fZ') + timedelta(hours=1)
     print(event_name, '-', event_time.strftime('%a %d %b, %H:%M'))
     database.insert_match(market_id=market_id, event_name=event_name, event_time=event_time)
+    return event_name
 
 
-def calculate_chance(odds):
+def calculate_probability(odds):
     return 1 / (odds - 1)
 
 
-def calculate_probabilities(market_id):
-    runners = sorted(get_runners(market_id), key=lambda x: x['selectionId'])
-    selection_id_probabilities = dict()
-    price_of_score = dict()
-    for runner in runners:
-        if (selection_id := runner['selectionId']) in selection_id_scores:
-            price = runner.get('lastPriceTraded', 1000)
-            price_of_score[selection_id_scores.get(selection_id)] = price
-            chance = calculate_chance(price)
-            selection_id_probabilities[selection_id] = chance
-    return selection_id_probabilities, price_of_score
+def get_price_of_scores(market_id) -> dict:
+    runners = get_runners(market_id)
+    return {selection_id_scores[selection_id]: runner.get('lastPriceTraded', 1000)
+            for runner in runners
+            if (selection_id := runner['selectionId']) in selection_id_scores}
+
+
+def get_probability_of_scores(market_id):
+    return {score: calculate_probability(price) for score, price in get_price_of_scores(market_id=market_id).items()}
 
 
 def calculate_points(true, prediction):
@@ -155,17 +160,38 @@ def calculate_expected_points(points_per_score, probabilities_of_score):
 
 
 def get_prediction(market_id):
-    selection_id_probabilities, price_of_score = calculate_probabilities(market_id)
-    expected_points_for_prediction = dict()
-    for prediction in scores.copy():
-        points_per_score = [calculate_points(real, prediction) for real in scores.copy()]
-        expected_points_for_prediction[prediction] = calculate_expected_points(
-            points_per_score, list(selection_id_probabilities.values())
-        )
-    expected_points_for_prediction = OrderedDict(sorted(expected_points_for_prediction.items(),
-                                                        key=lambda x: x[1], reverse=True))
-    database.insert_predictions(market_id, expected_points_for_prediction, price_of_score)
-    print(tabulate(expected_points_for_prediction.items(), headers=["score", "expected poins"], tablefmt="psql"))
+    event_name = get_event_info(market_id)
+
+    price_of_scores = get_price_of_scores(market_id)
+    df = pd.DataFrame(price_of_scores.values(), index=price_of_scores.keys(), columns=['price'])
+    df['probability'] = calculate_probability(df['price'])
+
+    df_points = pd.DataFrame(index=df.index, columns=df.index)
+    for real, prediction in product(scores, scores):
+        df_points.loc[real, prediction] = calculate_points(real, prediction)
+
+    df['expected_points'] = df.loc[:, 'probability'].values @ df_points.values
+    make_plots(df, market_id, event_name)
+    database.insert_predictions(market_id, df)
+    print(tabulate(df.sort_values(by='expected_points', ascending=False), tablefmt="psql"))
+
+
+def create_matrix(column: pd.Series):
+    matrix = np.ones((4, 4)) * np.inf
+    for (team_a_goals, team_b_goals), value in column.items():
+        matrix[team_a_goals, team_b_goals] = value
+    return matrix
+
+
+def make_plots(df, market_id, event_name):
+    plot_cols = ['price', 'probability', 'expected_points']
+    fig, ax = plt.subplots(1, len(plot_cols))
+    for i, col in enumerate(plot_cols):
+        matrix = create_matrix(df[col])
+        ax[i].matshow(matrix, cmap=cm.gray)
+        ax[i].set_title(col)
+    fig.suptitle(event_name)
+    fig.savefig(f'images/{market_id[2:]}.png')
 
 
 def main():
@@ -173,7 +199,6 @@ def main():
 
     for market_id in market_ids:
         print(f"Match: https://www.betfair.com/exchange/plus/football/market/{market_id}")
-        get_event_info(market_id)
         get_prediction(market_id)
 
 
