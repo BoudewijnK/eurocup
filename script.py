@@ -173,7 +173,7 @@ def get_prediction(market_id):
     df['expected_points'] = df.loc[:, 'probability'].values @ df_points.values
     make_plots(df, market_id, event_name)
     database.insert_predictions(market_id, df)
-    print(tabulate(df.sort_values(by='expected_points', ascending=False), tablefmt="psql"))
+    print(tabulate(df.sort_values(by='expected_points', ascending=False), headers=df.columns, tablefmt="psql"))
 
 
 def create_matrix(column: pd.Series):
