@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from matplotlib import cm
 from tabulate import tabulate
 
-from eurocup import database
+import database
 
 load_dotenv()
 
