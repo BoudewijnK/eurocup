@@ -47,13 +47,13 @@ def create_tables():
                     {', '.join([f"price_{score_col} real" for score_col in create_score_cols()])}
                     )''')
 
-    new_cols = [("goals_a_true", "integer"), ("goals_b_true", "integer"), ("goals_a_pred", "integer"),
-                ("goals_b_pred", "integer"), ("points_true", "integer"), ("points_pred", "float")]
-
-    for col_name, col_type in new_cols:
-        query = f'''ALTER TABLE matches ADD COLUMN {col_name} {col_type}'''
-        print(query)
-        cur.execute(query)
+    # new_cols = [("goals_a_true", "integer"), ("goals_b_true", "integer"), ("goals_a_pred", "integer"),
+    #             ("goals_b_pred", "integer"), ("points_true", "integer"), ("points_pred", "float")]
+    #
+    # for col_name, col_type in new_cols:
+    #     query = f'''ALTER TABLE matches ADD COLUMN {col_name} {col_type}'''
+    #     print(query)
+    #     cur.execute(query)
 
     # for score_col in create_score_cols():
     #     query = f'''ALTER TABLE predictions ADD COLUMN price_{score_col} real'''
