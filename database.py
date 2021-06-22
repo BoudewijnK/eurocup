@@ -35,7 +35,9 @@ def create_tables():
     con = sqlite3.connect(DB_NAME)
     cur = con.cursor()
     cur.execute('''CREATE TABLE IF NOT EXISTS matches
-                   (id integer PRIMARY KEY, market_id text UNIQUE, name text, time text, real_score text)''')
+                   (id integer PRIMARY KEY, market_id text UNIQUE, name text, time text, 
+                   goals_a_true integer, goals_b_true integer, goals_a_pred integer, goals_b_pred integer, 
+                   points_true integer, points_pred float)''')
 
     cur.execute(f'''CREATE TABLE IF NOT EXISTS predictions
                     (id integer PRIMARY KEY, 
@@ -44,6 +46,14 @@ def create_tables():
                     {', '.join([f"{score_col} real" for score_col in create_score_cols()])},
                     {', '.join([f"price_{score_col} real" for score_col in create_score_cols()])}
                     )''')
+
+    new_cols = [("goals_a_true", "integer"), ("goals_b_true", "integer"), ("goals_a_pred", "integer"),
+                ("goals_b_pred", "integer"), ("points_true", "integer"), ("points_pred", "float")]
+
+    for col_name, col_type in new_cols:
+        query = f'''ALTER TABLE matches ADD COLUMN {col_name} {col_type}'''
+        print(query)
+        cur.execute(query)
 
     # for score_col in create_score_cols():
     #     query = f'''ALTER TABLE predictions ADD COLUMN price_{score_col} real'''
