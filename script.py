@@ -49,7 +49,7 @@ scores = list(selection_id_scores.values())
 
 def request_market_ids():
     now = datetime.now()
-    future = now + timedelta(days=2)
+    future = now + timedelta(days=6)
     data = {
         "filter": {
             "competitionIds": [EURO_2020_ID],
