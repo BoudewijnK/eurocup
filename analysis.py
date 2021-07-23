@@ -190,14 +190,16 @@ def main():
 
     plt.figure()
     bw = 0.3
-    sns.kdeplot(df.loc[pool_mask, 'max_expected'], bw_adjust=bw)
-    sns.kdeplot(df.loc[knockout_mask, 'max_expected'], bw_adjust=bw)
+    sns.kdeplot(df.loc[pool_mask, 'max_expected'], bw_adjust=bw, label='pool')
+    sns.kdeplot(df.loc[knockout_mask, 'max_expected'], bw_adjust=bw, label='knockout')
+    plt.legend()
     plt.savefig('analysis/pool_vs_knockout_expected_points.png')
 
     plt.figure()
     bw = 0.1
-    sns.kdeplot(df.loc[pool_mask, 'point_true'], bw_adjust=bw)
-    sns.kdeplot(df.loc[knockout_mask, 'point_true'], bw_adjust=bw)
+    sns.kdeplot(df.loc[pool_mask, 'point_true'], bw_adjust=bw, label='pool')
+    sns.kdeplot(df.loc[knockout_mask, 'point_true'], bw_adjust=bw, label='knockout')
+    plt.legend()
     plt.savefig('analysis/pool_vs_knockout_true_points.png')
 
     norm = True
